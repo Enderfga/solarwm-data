@@ -1,0 +1,30 @@
+# External model / tool locations and runtime knobs.
+#
+# DRY RUN IS THE DEFAULT AND IT IS NOT A REAL RUN. With `dry_run: true` the adapters
+# emit placeholders: a synthetic forward-moving trajectory, metrics seeded from the clip
+# id, and a caption drawn from a handful of templates. They are plausible enough to pass
+# every structural check. Set `dry_run: false` for real output.
+dry_run: true
+
+depth_fusion:
+  ema_momentum: 0.99      # temporal smoothing of per-frame scale
+
+# Tool checkouts, relative to SOLAR_WM_ROOT. These names must match what the
+# scripts/setup_*.sh helpers create. Paths are case-sensitive.
+pi3x:
+  repo: third_party/Pi3
+  weights: weights/pi3                 # relative to SOLAR_WM_WEIGHTS
+moge2:
+  repo: third_party/moge
+  weights: weights/moge2
+vipe:
+  repo: third_party/vipe               # Apache-2.0
+dover:
+  repo: third_party/DOVER
+unimatch:
+  repo: third_party/unimatch
+  sample_interval_s: 0.5    # sample frame pairs every 0.5s across the first 60s
+qwen_vlm:
+  model: Qwen/Qwen2.5-VL-7B-Instruct   # optional local captioner; Apache-2.0
+  weights: weights/qwen_vl
+dover_chunk_s: 5            # DOVER averaged over non-overlapping 5s chunks

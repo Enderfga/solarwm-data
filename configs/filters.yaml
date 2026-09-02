@@ -1,0 +1,189 @@
+# Per-dataset quality thresholds calibrated from source-specific measurements.
+#
+# The released policy in filters_released.yaml is a reference, not the authority here.
+# It was calibrated for 16 fps / 60 s clips; this file is for the 24 fps / 5.04 s rebuild,
+# and its thresholds do not transfer to the 24 fps / 5.04 s distributions. The
+# percentiles below come from 1200 measured clips per source.
+#
+# TWO-STAGE DESIGN. These gates remove TECHNICALLY BROKEN clips only:
+#   static (no camera signal at all) · edited (time discontinuity) · extreme motion
+#   (unreliable pose / motion blur) · severe visual degradation.
+# Semantic curation — how good a clip is for training — happens at assembly, where the
+# VLM fields (vlm_quality, reject_flags, scene_transition) and the camera-dynamics
+# gate live. Mixing the two here would bake one opinion of "good" into the corpus itself,
+# and STORE_ALL exists precisely so that opinion stays re-judgeable without reprocessing.
+#
+# CEILING RULE. The flow ceiling means different things per pose mode: for `default`
+# sources VIPE ESTIMATES the trajectory, so extreme flow threatens pose correctness; for
+# `gt_pose` sources the trajectory is given and the ceiling is only a sanity bound. That
+# is why gt_pose sources carry visibly higher ceilings — not laxity, different purpose.
+#
+# Ranges are [min, max]; a clip is kept only if every applied metric falls inside its
+# range. `null` = not applied for that dataset.
+#
+# Metrics:
+#   vmaf            FFmpeg VMAF motion score
+#   unimatch        UniMatch optical-flow magnitude
+#   dover           DOVER quality (technical+aesthetic averaged into [0,1])
+#   color_sat       mean color saturation
+#   scene_cuts      PySceneDetect scene-cut count (max only; <= N)
+#   vlm_entity_density  allowed range of the 1|2|3 density category (1 none, 2 sparse,
+#                       3 dense) — a MAX-SIMULTANEOUS category, not a count
+#   vlm_quality         allowed range on the 1.0-5.0 scale, whole steps
+
+# NOT EVERY REGISTERED SOURCE HAS A ROW HERE, and that is deliberate. `mind` is
+# registered in the pipeline and carries a policy in filters_released.yaml, but it has never
+# been measured at 24 fps, so it has no calibrated row in this file and running it against
+# this config raises. Calibrate it with scripts/calibrate_filters.py instead of copying
+# another source's row or running it ungated.
+
+datasets:
+  # p50 flow 184, p95 311 — a fast game camera. GT poses are exact here, so the
+  # ceiling is only a sanity bound.
+  omniworld:
+    vmaf:        [0.5, 25]
+    unimatch:    [3, 320]
+    dover:       [0.35, 1.0]     # p05 0.36
+    color_sat:   null            # engine render; saturation carries no defect signal here
+    scene_cuts:  null            # continuous engine render
+    vlm_entity_density: null            # entity/quality curation moved to assembly
+    vlm_quality: null
+
+
+  # p50 flow 132, p95 381 — the fastest source in the corpus (drone + game camera).
+  # GT poses make the flow ceiling a sanity bound only.
+  sekai_game:
+    vmaf:        [0.5, 30]
+    unimatch:    [3, 400]
+    dover:       [0.15, 1.0]     # p05 0.15; stylised game render scores low by nature
+    color_sat:   [0, 260]
+    scene_cuts:  null
+    vlm_entity_density: null
+    vlm_quality: null
+
+
+  # p50 flow 56, p95 165 (real walking footage).
+  # `default` mode: VIPE estimates pose, so the ceiling stays near p95 rather than above.
+  sekai_walking:
+    vmaf:        [0.5, 25]
+    unimatch:    [3, 170]
+    dover:       [0.38, 1.0]     # p05 0.41
+    color_sat:   [0, 200]
+    scene_cuts:  1
+    vlm_entity_density: null
+    vlm_quality: null
+
+
+  # p50 flow 91, p95 221; DOVER p50 0.35. DOVER shifts with the spec because it averages over
+  # 5s chunks, so a 60s clip had 12 chunks to average while a 5.04s clip has one, which
+  # widens the spread and drags the low tail down. Calibrated to the actual distribution.
+  miradata:
+    vmaf:        [0.5, 25]
+    unimatch:    [3, 230]
+    dover:       [0.20, 1.0]     # p05 0.18
+    color_sat:   [0, 220]
+    scene_cuts:  1               # p95 is 2 — real edited internet video, so keep this gate
+    vlm_entity_density: null
+    vlm_quality: null
+
+  dl3dv:
+    vmaf:        [0.5, 50]
+    unimatch:    [3, 200]
+    dover:       [0.25, 1.0]
+    color_sat:   [0, 180]
+    scene_cuts:  null     # one continuous orbit of a static scene; cuts cannot occur
+    vlm_entity_density: null
+    vlm_quality: null
+
+  spatialvid:
+    vmaf:        [0.5, 20]
+    unimatch:    [3, 120]
+    dover:       [0.30, 1.0]     # p05 0.33
+    color_sat:   [0, 220]
+    scene_cuts:  null            # p95 is 0
+    vlm_entity_density: null
+    vlm_quality: null
+
+
+  openvid:        # internet T2V (analogue: miradata/spatialvid)
+    vmaf:        [0.5, 50]
+    unimatch:    [3, 80]
+    dover:       [0.4, 1.0]
+    color_sat:   [0, 180]
+    scene_cuts:  1
+    vlm_entity_density: null
+    vlm_quality: null
+
+  vidgen:         # internet T2V (analogue: miradata/spatialvid)
+    vmaf:        [0.5, 50]
+    unimatch:    [3, 80]
+    dover:       [0.4, 1.0]
+    color_sat:   [0, 180]
+    scene_cuts:  1
+    vlm_entity_density: null
+    vlm_quality: null
+
+  ditto:          # synthetic edit triplets — stylised content scores lower on DOVER
+    vmaf:        [0.5, 50]
+    unimatch:    [3, 80]
+    dover:       [0.3, 1.0]
+    color_sat:   null     # stylised grading would trip a real-video saturation gate
+    scene_cuts:  1
+    vlm_entity_density: null
+    vlm_quality: null
+
+  # RealEstate10K subset. Measured p50 flow 66, p95 117. DOVER p05 is 0.37.
+  # ``gt_pose`` uses shipped W2C, so the flow ceiling is a sanity bound.
+  realcam_vid:
+    vmaf:        [0.5, 20]
+    unimatch:    [3, 130]
+    dover:       [0.35, 1.0]     # p05 0.37
+    color_sat:   [0, 220]
+    scene_cuts:  1
+    vlm_entity_density: null
+    vlm_quality: null
+
+
+  # ABot-World-Explorer-500h: UE exploration episodes, per-frame COLMAP GT (gt_pose).
+  # Gates list ONLY saturation for abot — no DOVER / VMAF / UniMatch row. That is
+  # consistent with what the source is: a
+  # uniform-quality engine render (so the visual-quality metrics carry no signal to
+  # discriminate on) with exact per-frame GT poses (so the flow gate is not needed to
+  # protect pose-estimation reliability, its actual purpose). scene_cuts is null for
+  # the same reason as multicamvideo below: a continuous render cannot cut.
+  # The transition / quality / flag gates on that sheet are VLM fields — they arrive
+  # with the annotation schema at assembly time, not here.
+  abot:
+    vmaf:        null
+    unimatch:    null
+    dover:       null
+    color_sat:   [0, 180]
+    scene_cuts:  null     # continuous render, no cuts by construction
+    vlm_entity_density: null
+    vlm_quality: null
+
+  multicamvideo:  # UE5 synthetic renders (analogue: sekai_game)
+    vmaf:        [0.5, 50]
+    unimatch:    [3, 80]
+    dover:       [0.25, 1.0]
+    color_sat:   null
+    scene_cuts:  null     # continuous render, no cuts by construction
+    vlm_entity_density: null
+    vlm_quality: null
+
+  zod:            # real driving; anonymisation blur lowers DOVER, vehicles inherent
+    vmaf:        [0.5, 50]
+    # QC 2026-06-10: ~60km/h driving flow median 89.8 — natural motion, GT poses exact.
+    # GT-pose sources need the flow gate only for training-data sanity (not VIPE
+    # reliability); 150 keeps normal driving, cuts highway-speed extremes.
+    unimatch:    [3, 150]
+    dover:       [0.3, 1.0]
+    color_sat:   [0, 180]
+    scene_cuts:  null     # continuous 20s drive, no cuts by construction
+    vlm_entity_density: null     # a vehicle-count gate would reject driving data wholesale
+    vlm_quality: null
+
+camera:
+  fov_deg:    [25, 120]   # both horizontal and vertical FoV must lie in range
+  focal_div_max: 0.20     # symmetric normalized |fx-fy| mismatch
+  scale_cov_max: 2.0      # coefficient of variation of per-frame metric scale

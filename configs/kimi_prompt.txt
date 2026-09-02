@@ -1,0 +1,47 @@
+You are annotating a video clip for a camera-controllable world-model training set. Watch the ENTIRE clip, including its beginning, middle, and end. Ignore audio and base every judgment only on visible content. Return ONE compact JSON object with exactly these fields:
+
+    "vlm_entity_density": one integer category describing the maximum simultaneous combined presence of people, vehicles, and animals at any point in the video:
+      1 = none visible;
+      2 = a small or sparse presence;
+      3 = a large, dense, crowded, traffic-heavy, herd-like, flock-like, school-like, or swarm-like presence.
+
+      Consider people, moving vehicles, stationary vehicles, and animals together. Judge the highest combined density visible at any single moment. Do not report exact counts, distinguish between entity types, or accumulate entities appearing at different times. Fixed non-living objects such as statues, mannequins, sculptures, posters, signs, and vehicle images do not count as entities.
+
+    "vlm_quality": one value from exactly [1.0, 2.0, 3.0, 4.0, 5.0]:
+      5.0 = clean, sharp, coherent, richly describable, with no material visual defects;
+      4.0 = clearly usable with only mild defects;
+      3.0 = usable but with noticeable blur, compression, overlays, low visibility, rendering artifacts, or uncertainty;
+      2.0 = severe defects substantially reduce training value;
+      1.0 = unusable, corrupt, black, almost entirely obscured, visually meaningless, or unsafe.
+
+      Score visual quality independently of scene transitions. A visually clean video containing a shot transition may still receive a high quality score, but the transition must be reported separately.
+
+    "reject_flags": list of any hard problems from [text_heavy, watermark, ui_overlay, blurry, near_static, low_light, nsfw, single_color]; use [] if none. Report all shot-transition information only in scene_transition, not in reject_flags.
+
+    "scene_type": one of [real_world, rendered, game, animation, mixed]. Classify the visible world by its source; this field does not change the dense_caption wording rules below.
+
+    "scene_transition": one object containing exactly:
+      "label": one of [none, possible, definite];
+      "count": integer number of shot transitions inside the video;
+      "timestamps_sec": approximate transition timestamps in seconds, or [] when none;
+      "evidence": one short visually grounded explanation, or "" when none.
+
+      A scene transition is a television- or film-style edit that abruptly jumps between shots without a physically continuous path. This includes hard cuts, fades, dissolves, wipes, montage edits, abrupt changes of location or time, and instantaneous jumps to another viewpoint even within the same location. One clear transition is sufficient for definite.
+
+      Continuous fast camera or object motion is NOT a transition. Do not flag rapid pan, tilt, orbit, forward or backward movement, motion blur, temporary occlusion, passing behind an object, exposure or lighting changes, flashing, entering a doorway or tunnel, or continuous movement through connected space.
+
+      Use possible only when a suspected edit could instead be explained by continuous fast motion, blur, or occlusion. Use definite only when adjacent shots are temporally or spatially discontinuous and cannot be connected by normal continuous camera or object motion.
+
+    "dense_caption": one factual, grammatical English paragraph containing 60 to 150 words and describing only the persistent static environment and stable scene content. Describe architecture, roads, terrain, vegetation, water bodies, furniture, fixed structures, stable spatial relationships, materials, colors, lighting, weather, and atmosphere. Include only content visible throughout or repeatedly across the video.
+
+      Do not mention people, crowds, clothing, identities, positions, or human actions. Do not mention animals, birds, insects, or their actions. Do not mention moving vehicles or actions such as driving, passing, turning, arriving, departing, or traffic flow. Do not describe any other transient moving subject or scene-internal action.
+
+      Stationary vehicles may be described only when the full video clearly shows that they remain stationary, such as parked cars, stationary buses, bicycles resting against a wall, docked boats, or displayed vehicles. If their motion state is uncertain, omit them. Unmistakably fixed statues, mannequins, sculptures, posters, and signs may be described.
+
+      Describe the visible environment around moving subjects without inventing occluded details. Describe synthetic, rendered, game, or animated content as the world it depicts, but never use the words "video game", "game", "render", "rendered", "CGI", "animation", "animated", "screenshot", "HUD", "third-person view", "video", "image", "clip", or "footage" in dense_caption.
+
+      Never mention camera motion, viewpoint changes, framing, perspective changes, or shot types, including pan, tilt, zoom, dolly, orbit, tracking, moving forward, moving backward, or camera movement. Prefer stable scene-relative relationships over image-plane phrases such as "on the left", "on the right", "in the foreground", or "in the background".
+
+      Use only visible evidence. Do not infer exact location, culture, era, profession, identity, relationships, intentions, purpose, cause, or time of day unless unmistakable. Avoid speculation and generic filler such as "likely", "perhaps", "suggests", "appears to be", "seems", "ideal for", or "overall appearance". Do not repeat or invent details to satisfy the word limit.
+
+Respond with ONLY the JSON object. Do not include markdown, code fences, comments, explanations, or additional fields.

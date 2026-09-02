@@ -1,0 +1,33 @@
+# SolarWM pipeline: VIPE default with the Pi3X+MoGe-2 fused depth backend (mod #1)
+# AND per-frame intrinsics BA (mod #2): optimize_intrinsics=true with the generic
+# solver (ba.fused=false, since the fused CUDA kernel assumes shared intrinsics).
+defaults:
+  - /slam: default
+
+instance: vipe.pipeline.default.DefaultAnnotationPipeline
+
+init:
+  camera_type: "pinhole"
+  intrinsics: "geocalib"
+  instance:
+    kf_gap_sec: 2.0
+    phrases: [person, animal, vehicle, ball, balloon, gun, pet, car, bus]
+    add_sky: true
+
+slam:
+  keyframe_depth: pi3xmoge
+  optimize_intrinsics: true
+  ba:
+    fused: false
+
+post:
+  depth_align_model: null
+
+output:
+  path: vipe_results/
+  skip_exists: false
+  save_artifacts: false
+  save_slam_map: false
+  save_viz: false
+  viz_downsample: 2
+  viz_attributes: [['rgb', 'instance'], ['depth', 'pcd']]

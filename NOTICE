@@ -1,0 +1,62 @@
+SolarWM Data Engine
+Copyright 2026 Guian Fang
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+--------------------------------------------------------------------------------
+Third-party source included here
+--------------------------------------------------------------------------------
+
+  vipe_patches/            Modifications to VIPE (NVIDIA, Apache-2.0), applied to a
+                           VIPE checkout at setup time. These files quote fragments
+                           of VIPE source as patch anchors; those fragments remain
+                           under VIPE's licence and copyright.
+
+Everything else — `solar_wm_data/`, `scripts/`, `configs/` and `skills/` — is original
+to this repository.
+
+--------------------------------------------------------------------------------
+External tools this engine drives
+--------------------------------------------------------------------------------
+
+Expected under `third_party/` (see `configs/models.yaml` and `scripts/setup_*.sh`).
+Not distributed here. Each keeps its own licence, which governs your use of it and
+of any weights it ships — check them before redistributing anything you produce.
+
+  VIPE            camera / SLAM backend, NVIDIA                    Apache-2.0
+  Pi3X            scale-ambiguous scene structure                  weights CC BY-NC 4.0
+  MoGe-2          per-frame metric depth
+  DOVER           video technical + aesthetic quality              S-Lab, NON-COMMERCIAL
+  UniMatch/GMFlow dense correspondence (optical flow)
+  PySceneDetect   shot-cut detection                               (installed via pip)
+  Qwen2.5-VL      optional local captioner                         Apache-2.0
+  FFmpeg / VMAF   decoding, encoding, VMAF Motion                  the build fetched by
+                  `scripts/setup_filter_tools.sh` is GPL-licensed
+
+--------------------------------------------------------------------------------
+Models used to produce the released corpus
+--------------------------------------------------------------------------------
+
+Not distributed here, and each under its own terms. Reproducing the released
+annotations requires accepting them.
+
+  Kimi-K2.6                       dense captions and the semantic annotation
+                                  fields, for every clip in the corpus
+  LTX-2.3                         Clean Plate generation backbone
+  LTX-2.3-22b-IC-LoRA-Clean-Plate the Clean Plate adapter
+  Gemma-3-12b                     text encoder in the Clean Plate pipeline,
+                                  under the Gemma Terms of Use
+
+The Clean Plate runner additionally imports the `ltx_core` / `ltx_pipelines`
+packages, pinned by revision in `solar_wm_data/clean_plate/__init__.py`. They are
+not installed by any script here.
+
+--------------------------------------------------------------------------------
+Datasets
+--------------------------------------------------------------------------------
+
+The source datasets this engine annotates (ABot-World-Explorer, DL3DV, MiraData,
+MIND, MultiCamVideo, OmniWorld, RealCam-Vid, Sekai, SpatialVID and the other
+extension sources) are NOT distributed here. Each is obtained from its own
+publisher under its own terms, several of which are non-commercial or require
+accepting a gated licence. This repository ships only the code that annotates them.

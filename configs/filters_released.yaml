@@ -1,0 +1,206 @@
+# The frozen per-owner selection policy that produced the released corpus. The report
+# documents it as a table; this file IS it, executable.
+#
+# Not the same file as `filters.yaml`, which is calibrated against the 24 fps rebuild's own
+# measured distributions. Load this one with `--filters filters_released`.
+#
+# It is self-checking. Every record in the corpus already carries the tier this policy gave
+# it, so `scripts/verify_released_policy.py` re-judges those records and compares. Re-run it
+# after any edit here: a policy file that no longer reproduces the corpus it describes is
+# worse than no policy file.
+#
+# NOTATION (report's table -> keys here)
+#   N  frame count ................ min_frames
+#   Q  VLM quality ................ vlm_quality           1.0-5.0, whole steps
+#   R  VLM reject-flag set ........ vlm_reject_flags      allowed subset ([] = must be empty)
+#                                   vlm_reject_flags_forbidden
+#   T  VLM transition count ....... vlm_transition_max
+#   E  VLM entity density ......... vlm_entity_density    1 none | 2 sparse | 3 dense
+#   D  mean DOVER ................. dover                 (technical+aesthetic)/2
+#   V  VMAF Motion ................ vmaf
+#   U  UniMatch motion ............ unimatch
+#   S  mean saturation ............ color_sat
+#   J  PySceneDetect cut count .... scene_cuts            max-only (<= N)
+#   A  non-empty caption .......... require_caption
+#   C120 / C125 ................... the camera block; C125 only raises the FOV ceiling
+#
+# NOT EXPRESSIBLE HERE, and deliberately so: `G` (the post-Clean geometry and
+# lineage check) and MiraData-Clean's "exact kept-source lineage". Those are not ranges
+# over one clip's own metrics — the first compares an output against the source interval
+# it came from, the second needs the source owner's whole kept set. Both live in
+# `solar_wm_data/clean_plate` (`check_lineage`, `kept_source_reasons`) and are enforced by
+# the Clean Plate stage. A clean clip can pass every gate in this file and still be
+# inadmissible because its source was rejected.
+
+# C120: both fields of view in [25,120] deg, focal divergence <= 0.20, scale CoV <= 2.
+camera:
+  fov_deg: [25, 120]
+  focal_div_max: 0.2
+  scale_cov_max: 2.0
+
+datasets:
+
+  # Both DL3DV temporal views carry the SAME rule in the report; one entry serves both.
+  dl3dv:
+    color_sat:   [0, 180]
+    vlm_quality: [4.0, 5.0]
+    dover:       [0.20, 1.0]
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+      dover:       [0.30, 1.0]
+
+  mind:
+    camera: {fov_deg: [25, 125]}      # C125 — the only owner with a raised FOV ceiling
+    vlm_reject_flags: []              # R = empty
+    vlm_transition_max: 0
+    vlm_quality: [4.0, 5.0]
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+
+  abot:
+    color_sat:   [0, 180]
+    vlm_reject_flags: []
+    vlm_transition_max: 0
+    vlm_quality: [4.0, 5.0]
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+
+  omniworld:
+    color_sat:   [0, 180]
+    vlm_reject_flags: []
+    vlm_transition_max: 0
+    vlm_quality: [4.0, 5.0]
+    dover:       [0.30, 1.0]
+    vmaf:        [0.5, 100]
+    unimatch:    [3, 250]
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+      unimatch:    [3, 200]
+
+  # Deliberately asymmetric: high-motion game trajectories are preserved without the
+  # generic camera-scalar or saturation gates, and quality down to 3 is accepted.
+  sekai_game:
+    unimatch:    [0, 350]
+    dover:       [0.20, 1.0]
+    vlm_quality: [3.0, 5.0]
+    vlm_reject_flags_forbidden: [blurry]
+    xhigh:
+      vlm_quality: [4.0, 5.0]
+      vlm_reject_flags: []
+
+  miradata:
+    require_caption: true
+    min_frames:  81
+    color_sat:   [0, 180]
+    vlm_quality: [4.0, 5.0]
+    dover:       [0.40, 1.0]
+    resolution:  [1280, 720]
+    vlm_reject_flags: []
+    vlm_transition_max: 0
+    vmaf:        [0.5, 50]
+    unimatch:    [3, 120]
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+      unimatch:    [3, 100]
+
+  realcam_vid:
+    min_frames:  81
+    color_sat:   [0, 180]
+    vlm_transition_max: 0
+    vlm_quality: [4.0, 5.0]
+    vmaf:        [0.5, 100]
+    dover:       [0.30, 1.0]
+    unimatch:    [3, 200]
+    vlm_reject_flags_forbidden: [blurry, ui_overlay]
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+      vlm_reject_flags: [near_static]   # empty, or only near_static
+
+  multicamvideo:
+    color_sat:   [0, 180]
+    vlm_reject_flags: []
+    vlm_transition_max: 0
+    vlm_quality: [4.0, 5.0]
+    dover:       [0.40, 1.0]
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+
+  sekai_walking:
+    require_caption: true
+    min_frames:  81
+    color_sat:   [0, 180]
+    vlm_transition_max: 0
+    vlm_quality: [4.0, 5.0]
+    vmaf:        [0.5, 50]
+    dover:       [0.35, 1.0]
+    unimatch:    [3, 120]
+    vlm_reject_flags: [watermark, near_static]
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+      vlm_reject_flags: []
+
+  spatialvid:
+    require_caption: true
+    min_frames:  81
+    color_sat:   [0, 180]
+    vlm_transition_max: 0
+    vlm_quality: [4.0, 5.0]
+    vmaf:        [0.5, 50]
+    dover:       [0.35, 1.0]
+    unimatch:    [3, 120]
+    scene_cuts:  0
+    vlm_reject_flags: [watermark, near_static]
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+      vlm_reject_flags: []
+
+  # --- Clean Plate owners. Each is a sibling of its source, never a replacement, and
+  # carries a stricter rule. `G` and the lineage check are enforced by the Clean Plate
+  # stage, not here.
+  miradata_clean:
+    require_caption: true
+    min_frames:  81
+    resolution:  [1280, 720]
+    color_sat:   [0, 180]
+    vlm_quality: [4.0, 5.0]
+    dover:       [0.40, 1.0]
+    vmaf:        [0.5, 50]
+    unimatch:    [3, 120]
+    vlm_reject_flags: []
+    vlm_transition_max: 0
+    scene_cuts:  1
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+      dover:       [0.45, 1.0]
+      unimatch:    [3, 100]
+
+  sekai_walking_clean:
+    require_caption: true
+    min_frames:  81
+    color_sat:   [0, 180]
+    vlm_transition_max: 0
+    vlm_quality: [4.0, 5.0]
+    dover:       [0.35, 1.0]
+    unimatch:    [3, 120]
+    vmaf:        [0.5, 50]
+    vlm_entity_density: [1, 2]        # E != 3
+    vlm_reject_flags: [watermark, near_static]
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+      vlm_reject_flags: []
+
+  spatialvid_clean:
+    require_caption: true
+    min_frames:  81
+    color_sat:   [0, 180]
+    vlm_transition_max: 0
+    vlm_quality: [4.0, 5.0]
+    vmaf:        [0.5, 50]
+    dover:       [0.35, 1.0]
+    unimatch:    [3, 120]
+    scene_cuts:  0
+    vlm_entity_density: [1, 2]        # E != 3
+    vlm_reject_flags: [watermark, near_static]
+    xhigh:
+      vlm_quality: [5.0, 5.0]
+      vlm_reject_flags: []

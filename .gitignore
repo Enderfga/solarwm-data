@@ -1,0 +1,32 @@
+# credentials & local env
+*.env
+.env*
+!.env.example
+
+# runtime artifacts
+weights/
+third_party/*
+!third_party/.gitkeep
+corpus/
+vlm_anno/
+logs/
+*.log
+*.jsonl
+
+# caches
+.cache/
+.pip_cache/
+hf_cache/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv*/
+build/
+dist/
+
+# editor / os
+.idea/
+.vscode/
+.DS_Store

@@ -1,0 +1,51 @@
+{
+  "ltx_checkpoint": {
+    "path": "models/ltx-2.3/ltx-2.3-22b-distilled.safetensors",
+    "sha256": "14409a4d1337a8ded02fa87fb895b17a91ab2c6588f7cc3352e624ff18a689bf",
+    "size": 46149345038,
+    "source": "Lightricks/LTX-2.3"
+  },
+  "spatial_upsampler": {
+    "path": "models/ltx-2.3/ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+    "sha256": "5f416311fa8172b65af67530758964708d29a317b830d689a51143b7f91913ed",
+    "size": 995743560,
+    "source": "Lightricks/LTX-2.3"
+  },
+  "clean_plate_lora": {
+    "path": "models/clean-plate/ltx-2.3-22b-ic-lora-clean-plate-1.0.safetensors",
+    "sha256": "a1b573a9649df549901ae6c5571a6d305d0620aed8953f39536e34da4ca01d6a",
+    "size": 327309305,
+    "source": "Lightricks/LTX-2.3-22b-IC-LoRA-Clean-Plate"
+  },
+  "gemma": {
+    "path": "models/gemma-3-12b-it-qat-q4_0-unquantized",
+    "files": [
+      {
+        "path": "model-00001-of-00005.safetensors",
+        "sha256": "e6fb899db428481aafb45a20130457df6e247e7cb03b7d9f01ee4bc2a9a08138",
+        "size": 4979902192
+      },
+      {
+        "path": "model-00002-of-00005.safetensors",
+        "sha256": "d251e7fe9799d529405ddb61705a44cd700bd30a8b66a8d44ae26ddf8365dbc6",
+        "size": 4931296592
+      },
+      {
+        "path": "model-00003-of-00005.safetensors",
+        "sha256": "0684ef801385f0669a0b3e4ab160c50877efdbfa40eb97788595985de2743e78",
+        "size": 4931296656
+      },
+      {
+        "path": "model-00004-of-00005.safetensors",
+        "sha256": "b4b964e6526f81ccfa625c900b72ce92d5e0fd2debb75998763038ad06b9c541",
+        "size": 4931296656
+      },
+      {
+        "path": "model-00005-of-00005.safetensors",
+        "sha256": "4ef2de8f93e165b4e02425769fc566000b0674256ef0c3a27b23a0d45eb12088",
+        "size": 4601000928
+      }
+    ],
+    "source": "Lightricks/gemma-3-12b-it-qat-q4_0-unquantized"
+  }
+}
