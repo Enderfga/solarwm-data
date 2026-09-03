@@ -7,7 +7,7 @@ The open data pipeline for
 
 [Project page](https://junchao-cs.github.io/SolarWM-Web/) ·
 [Dataset](https://huggingface.co/datasets/junchaoh-cs/SolarWM-Data) ·
-[Model weights](https://huggingface.co/junchaoh-cs/SolarWM) ·
+[Model weights](https://huggingface.co/collections/junchaoh-cs/solarwm) ·
 [Paper](https://arxiv.org/pdf/2609.02886)
 
 </div>
