@@ -16,6 +16,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -25,8 +26,7 @@ from pathlib import Path
 from typing import Any
 
 
-PROMPT_SHA256 = "acd355fa3213334c45e2c2624f4e40d3fb61d4f4d48f69b3e47ba6fb88dc8dbb"
-# The schema, the frozen runtime identities and the validator live in the package so
+# The schema, runtime defaults and validator live in the package so
 # there is ONE definition of the contract. Editing them here instead would let the
 # runner and the library disagree about what a valid annotation is.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -35,6 +35,7 @@ from solar_wm_data.caption.kimi import (  # noqa: E402
     TRANSITION_LABELS, QUALITY_VALUES, FORBIDDEN_CAPTION_PATTERNS,
     word_count, validate_response,
 )
+from solar_wm_data.caption import h3  # noqa: E402
 
 
 def utc_now() -> str:
@@ -79,6 +80,9 @@ def read_manifest(path: Path) -> list[dict[str, Any]]:
         row = dict(row)
         row["sample_id"] = sample_id
         row["video_path"] = str(video_path)
+        if row.get("meta_path"):
+            meta_path = Path(str(row["meta_path"]))
+            row["meta_path"] = str(meta_path if meta_path.is_absolute() else (path.parent / meta_path).resolve())
         row["manifest_line"] = line_number
         rows.append(row)
     ids = [row["sample_id"] for row in rows]
@@ -228,24 +232,38 @@ def multimodal_content(prompt: str, frames: list[dict[str, Any]]) -> list[dict[s
     return content
 
 
-def call_model(endpoint: str, model: str, content: list[dict[str, Any]], timeout: int) -> dict[str, Any]:
+def call_model(endpoint: str, model: str, content: list[dict[str, Any]], timeout: int,
+               h3_bundle: dict[str, Any] | None = None,
+               feedback: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    if os.environ.get("end_user") != "junchuang":
+        raise ValueError("end_user=junchuang is required before inference")
+    messages = [{"role": "user", "content": content}]
+    if h3_bundle:
+        messages.insert(0, {"role": "system", "content": h3_bundle["system"]})
+        messages.extend(feedback or [])
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": content}],
+        "messages": messages,
         "temperature": 0,
         "seed": 0,
         "max_completion_tokens": 4096,
         "stream": False,
         "chat_template_kwargs": {"thinking": False},
-        "response_format": {
+    }
+    # The H3 production endpoint used prompt JSON plus the frozen local validator.
+    if h3_bundle is None:
+        payload["response_format"] = {
             "type": "json_schema",
             "json_schema": {"name": "solar_kimi_caption_v1", "strict": True, "schema": response_schema()},
-        },
-    }
+        }
+    headers = {"Content-Type": "application/json", "X-End-User": "junchuang"}
+    api_key = os.environ.get("SOLAR_WM_VLM_API_KEY")
+    if api_key:
+        headers["Authorization"] = "Bearer " + api_key
     request = urllib.request.Request(
         f"{endpoint}/chat/completions",
         data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -296,29 +314,51 @@ def process_sample(
     runtime: str,
     workers: int,
     timeout: int,
+    h3_bundle: dict[str, Any] | None = None,
+    stop_admissions: threading.Event | None = None,
 ) -> dict[str, Any]:
     sample_id = row["sample_id"]
     record_path = output_dir / "records" / f"{sample_id}.json"
     attempt_dir = output_dir / "attempts" / sample_id
     started = time.monotonic()
     attempts: list[dict[str, Any]] = []
+    record_schema = "solar_kimi_h3_caption_record_v1" if h3_bundle else "solar_kimi_caption_record_v1"
     try:
         video_path = Path(row["video_path"])
         probe = probe_video(video_path)
         duration = float(probe["format"]["duration"])
+        source_meta_sha = None
+        source_video_sha = None
+        if h3_bundle:
+            source_meta_sha = sha256_file(Path(row["meta_path"]))
+            source_video_sha = sha256_file(video_path)
         with tempfile.TemporaryDirectory(prefix=f"solar-kimi-{sample_id}-") as temporary:
             frames = extract_frames(video_path, Path(temporary), duration)
             content = multimodal_content(prompt, frames)
+            if h3_bundle:
+                content.append({"type": "text", "text": h3_bundle["post_images"]})
             final_response = None
             status = "terminal_invalid"
+            feedback: list[dict[str, Any]] = []
             for attempt in (1, 2):
                 attempt_started = time.monotonic()
                 envelope: dict[str, Any] = {"sample_id": sample_id, "attempt": attempt, "created_at": utc_now()}
                 try:
-                    raw = call_model(endpoint, model, content, timeout)
+                    if stop_admissions and stop_admissions.is_set():
+                        raise RuntimeError("inference stopped after uncertain transport; confirm endpoint drain before a new run")
+                    try:
+                        raw = call_model(endpoint, model, content, timeout, h3_bundle, feedback)
+                    except Exception:
+                        if h3_bundle and stop_admissions:
+                            stop_admissions.set()
+                        raise
                     text = response_text(raw)
-                    parsed, normalization = parse_json_response(text)
-                    validation_errors, normalized = validate_response(parsed, duration)
+                    parsed, normalization = h3.parse_response(text) if h3_bundle else parse_json_response(text)
+                    if h3_bundle:
+                        validation_errors = h3.validate_response(raw, parsed, len(frames))
+                        normalized = parsed if not validation_errors else None
+                    else:
+                        validation_errors, normalized = validate_response(parsed, duration)
                     envelope.update(
                         {
                             "api_response": raw,
@@ -336,6 +376,8 @@ def process_sample(
                         }
                     )
                     if validation_errors:
+                        if h3_bundle:
+                            feedback = h3.feedback_messages(validation_errors, text)
                         continue
                     final_response = normalized
                     status = "success"
@@ -349,15 +391,24 @@ def process_sample(
                     )
                     write_json_create(attempt_dir / f"attempt_{attempt:02d}.json", envelope)
                     attempts.append({"attempt": attempt, "error": envelope["error"], "elapsed_sec": envelope["elapsed_sec"]})
+                    if h3_bundle and stop_admissions and stop_admissions.is_set():
+                        status = "failed"
+                        break
+                    if h3_bundle:
+                        feedback = h3.feedback_messages(["response JSON or structure invalid; return valid complete JSON"],
+                                                        text if "text" in locals() else None)
+            if h3_bundle and (source_video_sha != sha256_file(video_path)
+                              or source_meta_sha != sha256_file(Path(row["meta_path"]))):
+                raise ValueError("source video or metadata changed during H3 inference")
             record = {
-                "schema_version": "solar_kimi_caption_record_v1",
+                "schema_version": record_schema,
                 "sample_id": sample_id,
                 "status": status,
                 "manifest_line": row["manifest_line"],
                 "input": {
                     "video_path": str(video_path),
                     "video_bytes": video_path.stat().st_size,
-                    "video_sha256": sha256_file(video_path),
+                    "video_sha256": source_video_sha or sha256_file(video_path),
                 },
                 "video_probe": probe,
                 "frame_policy": {
@@ -379,22 +430,26 @@ def process_sample(
                     "max_attempts": 2,
                     "thinking": False,
                 },
-                "prompt_sha256": PROMPT_SHA256,
+                "prompt_text": prompt,
                 "attempts": attempts,
                 "response": final_response,
                 "wall_sec": time.monotonic() - started,
             }
     except Exception as error:
         record = {
-            "schema_version": "solar_kimi_caption_record_v1",
+            "schema_version": record_schema,
             "sample_id": sample_id,
             "status": "failed",
             "manifest_line": row["manifest_line"],
-            "prompt_sha256": PROMPT_SHA256,
+            "prompt_text": prompt,
             "error": {"type": type(error).__name__, "message": str(error)},
             "attempts": attempts,
             "wall_sec": time.monotonic() - started,
         }
+    if h3_bundle:
+        record.update(caption_format="h3", prompt_bundle=dict(h3_bundle))
+        if "input" in record:
+            record["input"].update(meta_path=row["meta_path"], source_meta_sha256=source_meta_sha)
     write_json_create(record_path, record)
     return record
 
@@ -415,18 +470,26 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--sample-id", action="append")
+    parser.add_argument("--caption-format", choices=("static", "h3"), default="static",
+                        help="static reproduces the released six-field annotation; h3 only recaptions without scoring")
     args = parser.parse_args()
     if not 1 <= args.workers <= 4:
         raise SystemExit("--workers must be in 1..4")
     if args.timeout < 1 or args.limit is not None and args.limit < 1:
         raise SystemExit("timeout and limit must be positive")
     endpoint = checked_endpoint(args.endpoint)
-    # The frozen prompt is part of the schema: its sha256 travels with every record,
-    # so a changed prompt is a new generation, not an edit. Verify before any work.
-    prompt_path = Path(__file__).resolve().parents[1] / "configs" / "kimi_prompt.txt"
-    prompt_bytes = prompt_path.read_bytes()
-    if sha256_bytes(prompt_bytes) != PROMPT_SHA256:
-        raise SystemExit(f"{prompt_path} SHA256 mismatch — this is a NEW prompt version")
+    if os.environ.get("end_user") != "junchuang":
+        raise SystemExit("set end_user=junchuang before inference")
+    # Read instructions once so every sample in this run uses the same text.
+    configs = Path(__file__).resolve().parents[1] / "configs"
+    h3_bundle = h3.load_prompt_bundle(configs) if args.caption_format == "h3" else None
+    if h3_bundle:
+        prompt_bytes = h3_bundle["main"].encode()
+    else:
+        prompt_path = configs / "kimi_prompt.txt"
+        prompt_bytes = prompt_path.read_bytes()
+    if not prompt_bytes.decode("utf-8").strip():
+        raise SystemExit("prompt must not be empty")
     rows = read_manifest(args.manifest)
     if args.sample_id:
         requested = set(args.sample_id)
@@ -437,6 +500,8 @@ def main() -> int:
         rows = rows[: args.limit]
     if not rows:
         raise SystemExit("no samples selected")
+    if h3_bundle and any(not row.get("meta_path") or not Path(row["meta_path"]).is_file() for row in rows):
+        raise SystemExit("H3 mode requires an existing meta_path for every sample")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     write_json_create(
         args.output_dir / "run_manifest.json",
@@ -447,7 +512,9 @@ def main() -> int:
             "input_manifest_sha256": sha256_file(args.manifest),
             "sample_ids_sha256": sha256_bytes("\n".join(row["sample_id"] for row in rows).encode()),
             "samples": len(rows),
-            "prompt_sha256": PROMPT_SHA256,
+            "prompt_text": prompt_bytes.decode("utf-8"),
+            "caption_format": args.caption_format,
+            "prompt_bundle": h3_bundle,
             "endpoint": endpoint,
             "model": args.model,
             "model_revision": args.model_revision,
@@ -458,6 +525,7 @@ def main() -> int:
         },
     )
     results: list[dict[str, Any]] = []
+    stop_admissions = threading.Event() if h3_bundle else None
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {
             pool.submit(
@@ -471,6 +539,8 @@ def main() -> int:
                 args.runtime,
                 args.workers,
                 args.timeout,
+                h3_bundle,
+                stop_admissions,
             ): row["sample_id"]
             for row in rows
         }
@@ -479,15 +549,20 @@ def main() -> int:
             results.append(result)
             print(json.dumps({"sample_id": result["sample_id"], "status": result["status"]}), flush=True)
     statuses = {status: sum(row["status"] == status for row in results) for status in ("success", "terminal_invalid", "failed")}
+    all_accepted = statuses["success"] == len(results)
+    complete = all_accepted if args.caption_format == "h3" else statuses["failed"] == 0
     summary = {
         "schema_version": "solar_kimi_caption_summary_v1",
         "samples": len(results),
         "status_counts": statuses,
-        "complete_with_rejects": statuses["failed"] == 0,
+        "complete_with_rejects": complete,
+        "all_samples_accepted": all_accepted,
+        "caption_format": args.caption_format,
+        "transport_drain_confirmation_required": bool(stop_admissions and stop_admissions.is_set()),
     }
     write_json_create(args.output_dir / "SUMMARY.json", summary)
     print(json.dumps(summary, indent=2, sort_keys=True))
-    return 0 if statuses["failed"] == 0 else 2
+    return 0 if complete else 2
 
 
 if __name__ == "__main__":

@@ -113,6 +113,15 @@ CUDA PyTorch environment, the external tools fetched by `scripts/setup_*.sh`, an
 pass every structural check. Copy `.env.example`, fill it in, and source it; no credential
 is baked into the code.
 
+For first-frame-conditioned H3 recaptioning, use the separate
+[`--caption-format h3` path](docs/kimi-h3-prompt.md). It includes the final production
+Kimi three-part prompt, four-field response validator and H3 prompt serializer.
+Edit the three prompt files directly; the next run uses and records their current text.
+It preserves the old caption as `static_scene_description` and leaves existing VLM
+scores and selection/camera metadata intact. The historical six-field annotation
+remains the default. H3 overlays publish their full `meta.jsonl` before clip files
+so text encoding can start from the accepted JSONL.
+
 ## Documentation
 
 The detailed pipeline guide is

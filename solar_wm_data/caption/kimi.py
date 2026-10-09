@@ -14,9 +14,9 @@ RUNTIME IDENTITY IS RECORDED, NOT PRESCRIBED. Whatever model revision and server
 run uses travels with each record, so a re-run under a different build is visibly a
 different generation rather than an invisible drift. ``RELEASE_MODEL_REVISION`` and
 ``RELEASE_RUNTIME`` are what produced the released corpus — the defaults, and the values
-to match if you are reproducing it, not a restriction on what you may run. The prompt is part of the schema the same way: edit one byte of
-``configs/kimi_prompt.txt`` and every record already annotated is provenance-stale, which
-is why the runner verifies its sha256 before processing anything.
+to match if you are reproducing it, not a restriction on what you may run. Edit
+``configs/kimi_prompt.txt`` directly; the next run reads the updated file and records
+the instruction text it actually used. Existing annotation records remain usable.
 
 VISUAL INPUT. Sample the ENTIRE clip at 1 fps, at most 64 frames, ffmpeg round-up; max
 image edge 768 px, JPEG qscale 3, no audio. Send them as separate image parts — some

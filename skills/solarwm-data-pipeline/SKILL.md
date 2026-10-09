@@ -156,7 +156,7 @@ solar_wm_data/          the engine — importable, no cluster assumptions
   spec.py              the single source of truth for clip length and frame rate
   split.py             the one train/test split rule, shared by recipes and model views
 scripts/               orchestration, annotation runners, packing, verification
-configs/               thresholds, frozen prompts and external model locations
+configs/               thresholds, caption prompts and external model locations
 vipe_patches/          modifications to the SLAM backend, applied at setup
 ```
 
@@ -328,16 +328,27 @@ nothing in §2 emits them. Decide the endpoint before you start: it costs money 
 an external dependency.
 
 ```bash
-python3 scripts/kimi_caption.py   ...   # released-caption path: pinned revision, frozen
-                                        # prompt (sha256-checked), 1 fps <=64 frames, temp 0
+python3 scripts/kimi_caption.py   ...   # released-caption defaults, editable prompt,
+                                        # 1 fps <=64 frames, temp 0
 python3 scripts/vlm_annotate.py   ...   # any OpenAI-compatible endpoint
 python3 scripts/kimi_materialize.py ... # fold accepted responses into the corpus metadata
 ```
+
+For H3 recaptioning, add `--caption-format h3` to both Kimi commands. Read the
+[final H3 prompt and run contract](../../docs/kimi-h3-prompt.md): it uses three
+editable instruction files and a four-field response, archives the old caption
+as `static_scene_description`, and preserves existing VLM scores and selection
+metadata. Set `end_user=junchuang`; requests send `X-End-User: junchuang`.
+Instructions are recorded as text; changing the files takes effect on the next run.
+H3 materialization writes accepted `meta.jsonl` and `META_JSONL_READY.json` before
+clip meta/prompt files, then `COMPLETE.json` last. Read `h3_prompt` directly for
+encoding; never use the Kimi instruction or archived static caption as H3 text.
 
 Set `SOLAR_WM_VLM_URL` / `SOLAR_WM_VLM_MODEL` / `SOLAR_WM_VLM_API_KEY`. Send frames as
 separate image parts, never one video part: some gateways accept a video part with a 200
 and drop it, and the model then invents a scene for every clip while the captions still
 look different from each other, so a duplicate check does not catch it.
+Both Kimi modes also require `end_user=junchuang` and send `X-End-User: junchuang`.
 
 The fleet also carries a local Qwen2.5-VL captioner for running with no external endpoint.
 It needs the weights in `configs/models.yaml` and is not what produced the released
